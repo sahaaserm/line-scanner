@@ -4,27 +4,132 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LIFF Barcode Scanner</title>
+  
+  <!-- LINE LIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- QuaggaJS Barcode Scanner Library -->
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
 
   <style>
-    body { font-family: sans-serif; background: #f4f6f9; margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; }
-    .container { width: 100%; max-width: 480px; background: #fff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 15px; box-sizing: border-box; text-align: center; }
-    h2 { color: #00b900; font-size: 20px; margin-top: 5px; }
-    #interactive.viewport { position: relative; width: 100%; height: 280px; overflow: hidden; border-radius: 8px; border: 2px dashed #00b900; background: #000; }
-    #interactive.viewport canvas, video { width: 100%; height: 100%; object-fit: cover; }
-    canvas.drawingBuffer { position: absolute; top: 0; left: 0; }
-    .status-box { margin-top: 15px; padding: 10px; border-radius: 6px; background-color: #e8f5e9; color: #2e7d32; font-weight: bold; font-size: 14px; }
-    .btn-reload { margin-top: 15px; padding: 10px 20px; background-color: #00b900; color: white; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; width: 100%; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      padding: 15px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 5px;
+      color: #00b900;
+      font-size: 20px;
+    }
+    #interactive.viewport {
+      position: relative;
+      width: 100%;
+      height: 250px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 2px dashed #00b900;
+      background: #000;
+    }
+    #interactive.viewport canvas, video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    canvas.drawingBuffer {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .status-box {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .form-group {
+      margin-top: 12px;
+      text-align: left;
+    }
+    .form-group label {
+      font-size: 13px;
+      font-weight: bold;
+      color: #333;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .btn-send {
+      margin-top: 15px;
+      padding: 12px;
+      background-color: #00b900;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-reload {
+      margin-top: 8px;
+      padding: 8px;
+      background-color: #777;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>📷 สแกนบาร์โค้ดสินค้า</h2>
+  <h2>📷 สแกนรับสินค้าเข้า</h2>
   <div id="interactive" class="viewport"></div>
-  <div id="status" class="status-box">กำลังเริ่มทำงาน...</div>
-  <button class="btn-reload" onclick="location.reload()">🔄 เปิดกล้องใหม่</button>
+  <div id="status" class="status-box">กำลังเริ่มกล้อง...</div>
+
+  <!-- ฟอร์มกรอกข้อมูลหลังสแกน -->
+  <div class="form-group">
+    <label>รหัสบาร์โค้ดที่สแกนได้:</label>
+    <input type="text" id="barcodeResult" placeholder="รหัสบาร์โค้ด..." readonly>
+  </div>
+  <div class="form-group">
+    <label>จำนวนที่รับเข้า (ชิ้น):</label>
+    <input type="number" id="qtyInput" placeholder="ระบุจำนวน เช่น 10" value="1">
+  </div>
+  <div class="form-group">
+    <label>ราคารวมจ่ายทั้งหมด (บาท):</label>
+    <input type="number" id="priceInput" placeholder="ระบุยอดรวม เช่น 2500">
+  </div>
+
+  <button class="btn-send" onclick="submitData()">📥 บันทึกส่งเข้าแชต</button>
+  <button class="btn-reload" onclick="location.reload()">🔄 สแกนใหม่</button>
 </div>
 
 <script>
@@ -40,7 +145,7 @@
         if (!liff.isLoggedIn()) {
           liff.login();
         } else {
-          document.getElementById("status").innerText = "พร้อมสแกน ส่องกล้องไปที่บาร์โค้ดได้เลย";
+          document.getElementById("status").innerText = "ส่องกล้องไปที่บาร์โค้ดได้เลย";
           startScanner();
         }
       })
@@ -55,7 +160,11 @@
         name: "Live",
         type: "LiveStream",
         target: document.querySelector('#interactive'),
-        constraints: { facingMode: "environment", width: { min: 640 }, height: { min: 480 } }
+        constraints: {
+          facingMode: "environment",
+          width: { min: 640 },
+          height: { min: 480 }
+        }
       },
       decoder: {
         readers: ["ean_reader", "ean_8_reader", "code_128_reader", "code_39_reader"]
@@ -71,20 +180,47 @@
     Quagga.onDetected(function(result) {
       if (result && result.codeResult) {
         let code = result.codeResult.code;
-        Quagga.stop();
-        document.getElementById("status").innerText = "✅ สแกนสำเร็จ: " + code;
-        sendCodeToChat(code);
+        Quagga.stop(); // หยุดกล้องเมื่อสแกนเจอ
+        document.getElementById("barcodeResult").value = code;
+        document.getElementById("status").innerText = "✅ สแกนสำเร็จ! กรอกจำนวนและยอดจ่ายด้านล่าง";
       }
     });
   }
 
-  function sendCodeToChat(code) {
+  function submitData() {
+    let code = document.getElementById("barcodeResult").value;
+    let qty = document.getElementById("qtyInput").value;
+    let price = document.getElementById("priceInput").value;
+
+    if (!code) {
+      alert("กรุณาสแกนบาร์โค้ดก่อนครับ");
+      return;
+    }
+    if (!qty || qty <= 0) {
+      alert("กรุณาระบุจำนวนสินค้าให้ถูกต้อง");
+      return;
+    }
+    if (!price || price < 0) {
+      alert("กรุณาระบุราคารวมจ่ายให้ถูกต้อง");
+      return;
+    }
+
+    // รวมข้อความให้อยู่ในรูปแบบ: รหัสบาร์โค้ด*จำนวน*ยอดจ่าย
+    let textMessage = `${code}*${qty}*${price}`;
+
     if (liff.isInClient()) {
-      liff.sendMessages([{ type: 'text', text: code }])
-        .then(() => { liff.closeWindow(); })
-        .catch((err) => { document.getElementById("status").innerText = "❌ ส่งข้อความไม่สำเร็จ: " + err.message; });
+      liff.sendMessages([
+        {
+          type: 'text',
+          text: textMessage
+        }
+      ]).then(() => {
+        liff.closeWindow(); // ส่งเสร็จแล้วปิด LIFF ทันที
+      }).catch((err) => {
+        alert("ส่งข้อความไม่สำเร็จ: " + err.message);
+      });
     } else {
-      alert("รหัสที่สแกนได้: " + code);
+      alert("ข้อความที่จะส่ง: " + textMessage);
     }
   }
 </script>
