@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFF Barcode Scanner</title>
+  
+  <!-- LINE LIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- QuaggaJS Barcode Scanner Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      padding: 15px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    h2 {
+      margin-top: 5px;
+      color: #00b900;
+      font-size: 20px;
+    }
+    #interactive.viewport {
+      position: relative;
+      width: 100%;
+      height: 280px;
+      overflow: hidden;
+      border-radius: 8px;
+      border: 2px dashed #00b900;
+      background: #000;
+    }
+    #interactive.viewport canvas, video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    canvas.drawingBuffer {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    .status-box {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 6px;
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .btn-reload {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background-color: #00b900;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>📷 สแกนบาร์โค้ดสินค้า</h2>
+  <div id="interactive" class="viewport"></div>
+  <div id="status" class="status-box">กำลังเริ่มทำงาน...</div>
+  <button class="btn-reload" onclick="location.reload()">🔄 เปิดกล้องใหม่</button>
+</div>
+
+<script>
+  // ⚠️ สำคัญมาก: นำ LIFF ID ที่ได้จาก LINE Developers มาใส่ตรงนี้ (เช่น "2001234567-AbCdEfGh")
+  const MY_LIFF_ID = "2011277464-wVL7BBlx"; 
+
+  window.onload = function() {
+    initLiff();
+  };
+
+  // 1. เริ่มต้นระบบ LIFF
+  function initLiff() {
+    liff.init({ liffId: MY_LIFF_ID })
+      .then(() => {
+        if (!liff.isLoggedIn()) {
+          liff.login();
+        } else {
+          document.getElementById("status").innerText = "พร้อมสแกน ส่องกล้องไปที่บาร์โค้ดได้เลย";
+          startScanner();
+        }
+      })
+      .catch((err) => {
+        document.getElementById("status").innerText = "⚠️ LIFF Init Error: " + err.message;
+      });
+  }
+
+  // 2. เริ่มเปิดกล้องสแกนด้วย Quagga2
+  function startScanner() {
+    Quagga.init({
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: document.querySelector('#interactive'),
+        constraints: {
+          facingMode: "environment", // ใช้กล้องหลัง
+          width: { min: 640 },
+          height: { min: 480 }
+        }
+      },
+      decoder: {
+        readers: [
+          "ean_reader", 
+          "ean_8_reader", 
+          "code_128_reader", 
+          "code_39_reader"
+        ] // รองรับบาร์โค้ดแท่งมาตรฐานทุกประเภท
+      }
+    }, function(err) {
+      if (err) {
+        document.getElementById("status").innerText = "❌ เปิดกล้องไม่สำเร็จ: " + err;
+        return;
+      }
+      Quagga.start();
+    });
+
+    // Event เมื่อสแกนเจอจุดบาร์โค้ด
+    Quagga.onDetected(function(result) {
+      if (result && result.codeResult) {
+        let code = result.codeResult.code;
+        
+        // หยุดสแกนเพื่อป้องกันการสแกนซ้ำ
+        Quagga.stop();
+        document.getElementById("status").innerText = "✅ สแกนสำเร็จ: " + code;
+
+        // ส่งรหัสบาร์โค้ดกลับไปยังห้องแชต LINE
+        sendCodeToChat(code);
+      }
+    });
+  }
+
+  // 3. ฟังก์ชันส่งข้อความลงแชต LINE แล้วปิด LIFF
+  function sendCodeToChat(code) {
+    if (liff.isInClient()) {
+      liff.sendMessages([
+        {
+          type: 'text',
+          text: code // ส่งรหัสบาร์โค้ดลงช่องแชตให้อัตโนมัติ
+        }
+      ]).then(() => {
+        liff.closeWindow(); // ปิดหน้าต่างสแกนทันทีเมื่อส่งเรียบร้อย
+      }).catch((err) => {
+        document.getElementById("status").innerText = "❌ ส่งข้อความไม่สำเร็จ: " + err.message;
+      });
+    } else {
+      alert("รหัสที่สแกนได้: " + code + "\n(กรุณาใช้งานผ่านแชต LINE)");
+    }
+  }
+</script>
+
+</body>
+</html>
