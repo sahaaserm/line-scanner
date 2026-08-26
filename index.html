@@ -1,39 +1,104 @@
-function submitData() {
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFF Barcode Scanner V2</title>
+  
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; background: #f4f6f9; padding: 15px; text-align: center; }
+    .container { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    h2 { color: #00b900; margin-top: 0; }
+    #interactive.viewport { width: 100%; height: 220px; border: 2px dashed #00b900; background: #000; position: relative; }
+    #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
+    .form-group { text-align: left; margin-top: 10px; }
+    .form-group label { font-size: 13px; font-weight: bold; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    .btn-send { width: 100%; padding: 12px; background: #00b900; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
+    #status { background: #e8f5e9; padding: 8px; border-radius: 6px; color: #2e7d32; font-weight: bold; margin-top: 10px; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>📷 สแกนรับสินค้าเข้า (V2)</h2>
+  <div id="interactive" class="viewport"></div>
+  <div id="status">กำลังเปิดกล้อง...</div>
+
+  <div class="form-group">
+    <label>รหัสบาร์โค้ด:</label>
+    <input type="text" id="barcodeResult" readonly placeholder="กรุณาสแกนบาร์โค้ด">
+  </div>
+  <div class="form-group">
+    <label>จำนวนที่รับเข้า (ชิ้น):</label>
+    <input type="number" id="qtyInput" value="1">
+  </div>
+  <div class="form-group">
+    <label>ราคารวมจ่ายทั้งหมด (บาท):</label>
+    <input type="number" id="priceInput" placeholder="ใส่ยอดเงิน เช่น 2500">
+  </div>
+
+  <button class="btn-send" onclick="submitData()">📥 บันทึกส่งเข้าแชต</button>
+</div>
+
+<script>
+  const MY_LIFF_ID = "2011277464-MBYJYeu1"; 
+
+  window.onload = function() {
+    liff.init({ liffId: MY_LIFF_ID }).then(() => {
+      if (!liff.isLoggedIn()) {
+        liff.login();
+      } else {
+        document.getElementById("status").innerText = "ส่องกล้องไปที่บาร์โค้ดได้เลย";
+        startScanner();
+      }
+    }).catch(err => {
+      document.getElementById("status").innerText = "❌ LIFF Error: " + err.message;
+    });
+  };
+
+  function startScanner() {
+    Quagga.init({
+      inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive') },
+      decoder: { readers: ["ean_reader", "ean_8_reader", "code_128_reader", "code_39_reader"] }
+    }, function(err) {
+      if (err) return document.getElementById("status").innerText = "❌ กล้องมีปัญหา: " + err;
+      Quagga.start();
+    });
+
+    Quagga.onDetected(function(result) {
+      if (result && result.codeResult) {
+        document.getElementById("barcodeResult").value = result.codeResult.code;
+        document.getElementById("status").innerText = "✅ สแกนสำเร็จ! กรอกข้อมูลแล้วกดส่ง";
+        Quagga.stop();
+      }
+    });
+  }
+
+  function submitData() {
     let code = document.getElementById("barcodeResult").value;
     let qty = document.getElementById("qtyInput").value;
     let price = document.getElementById("priceInput").value;
 
-    if (!code) {
-      alert("⚠️ กรุณาสแกนบาร์โค้ดให้สำเร็จก่อนครับ");
-      return;
-    }
-    if (!qty || qty <= 0) {
-      alert("⚠️ กรุณาระบุจำนวนสินค้าให้ถูกต้อง");
-      return;
-    }
-    if (!price || price < 0) {
-      alert("⚠️ กรุณาระบุราคารวมจ่ายให้ถูกต้อง");
+    if (!code || !qty || !price) {
+      alert("⚠️ กรุณาสแกนบาร์โค้ด และกรอกจำนวนกับยอดเงินให้ครบถ้วน");
       return;
     }
 
-    // รวมข้อความให้อยู่ในรูปแบบ: รหัสบาร์โค้ด*จำนวน*ยอดจ่าย
-    let textMessage = `${code}*${qty}*${price}`;
+    let msg = `${code}*${qty}*${price}`;
 
-    // เช็กว่าเปิดผ่านแอป LINE หรือไม่
     if (liff.isInClient()) {
-      liff.sendMessages([
-        {
-          type: 'text',
-          text: textMessage
-        }
-      ]).then(() => {
-        liff.closeWindow(); // ส่งเสร็จแล้วปิด LIFF ทันที
-      }).catch((err) => {
-        // แสดงกล่องแจ้งเตือน Error ที่เกิดขึ้น
-        alert("❌ ส่งเข้าแชตไม่สำเร็จ เกิดจาก: " + err.code + " - " + err.message);
-      });
+      liff.sendMessages([{ type: 'text', text: msg }])
+        .then(() => liff.closeWindow())
+        .catch(err => alert("❌ ส่งไม่สำเร็จ: " + err.message));
     } else {
-      // หากทดสอบเปิดผ่าน Browser คอมพิวเตอร์/ปกติ
-      alert("📌 ข้อความที่จะส่งเข้าแชตคือ: " + textMessage + "\n(หมายเหตุ: การส่งเข้าแชตอัตโนมัติกดได้เฉพาะเมื่อเปิดผ่านแอป LINE เท่านั้น)");
+      alert("ข้อความที่จะส่ง: " + msg);
     }
   }
+</script>
+
+</body>
+</html>
