@@ -3,34 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LIFF Barcode Scanner V2</title>
+  <title>LIFF Barcode Scanner V3</title>
   
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
 
   <style>
-    body { font-family: sans-serif; background: #f4f6f9; padding: 15px; text-align: center; }
-    .container { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    h2 { color: #00b900; margin-top: 0; }
-    #interactive.viewport { width: 100%; height: 220px; border: 2px dashed #00b900; background: #000; position: relative; }
+    body { font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 12px; margin: 0; }
+    .container { background: #fff; border-radius: 12px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 480px; margin: auto; }
+    h2 { color: #00b900; margin-top: 0; text-align: center; font-size: 18px; }
+    #interactive.viewport { width: 100%; height: 200px; border: 2px dashed #00b900; background: #000; position: relative; border-radius: 8px; overflow: hidden; }
     #interactive.viewport video { width: 100%; height: 100%; object-fit: cover; }
-    .form-group { text-align: left; margin-top: 10px; }
-    .form-group label { font-size: 13px; font-weight: bold; }
-    .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+    canvas.drawingBuffer { display: none; } /* ซ่อนเส้นวาดเพื่อลดการกระตุก */
+    
+    .status-box { background: #e8f5e9; padding: 8px; border-radius: 6px; color: #2e7d32; font-weight: bold; margin-top: 10px; font-size: 13px; text-align: center; }
+    .form-group { text-align: left; margin-top: 12px; }
+    .form-group label { font-size: 13px; font-weight: bold; color: #333; display: block; margin-bottom: 4px; }
+    .form-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; background-color: #fff; }
+    
     .btn-send { width: 100%; padding: 12px; background: #00b900; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
-    #status { background: #e8f5e9; padding: 8px; border-radius: 6px; color: #2e7d32; font-weight: bold; margin-top: 10px; font-size: 14px; }
+    .btn-reset { width: 100%; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; font-size: 14px; margin-top: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>📷 สแกนรับสินค้าเข้า (V2)</h2>
+  <h2>📷 สแกนรับสินค้าเข้า</h2>
   <div id="interactive" class="viewport"></div>
-  <div id="status">กำลังเปิดกล้อง...</div>
+  <div id="status" class="status-box">กำลังเปิดกล้อง...</div>
 
   <div class="form-group">
-    <label>รหัสบาร์โค้ด:</label>
-    <input type="text" id="barcodeResult" readonly placeholder="กรุณาสแกนบาร์โค้ด">
+    <label>รหัสบาร์โค้ด (พิมพ์แก้ไขได้หากไม่ตรง):</label>
+    <input type="text" id="barcodeResult" placeholder="สแกนหรือพิมพ์รหัสบาร์โค้ด">
   </div>
   <div class="form-group">
     <label>จำนวนที่รับเข้า (ชิ้น):</label>
@@ -38,14 +42,16 @@
   </div>
   <div class="form-group">
     <label>ราคารวมจ่ายทั้งหมด (บาท):</label>
-    <input type="number" id="priceInput" placeholder="ใส่ยอดเงิน เช่น 2500">
+    <input type="number" id="priceInput" placeholder="ระบุยอดเงิน เช่น 2500">
   </div>
 
   <button class="btn-send" onclick="submitData()">📥 บันทึกส่งเข้าแชต</button>
+  <button class="btn-reset" onclick="resetScanner()">🔄 สแกนใหม่อีกครั้ง</button>
 </div>
 
 <script>
   const MY_LIFF_ID = "2011277464-MBYJYeu1"; 
+  let isScanned = false; // ป้องกันสแกนซ้ำ
 
   window.onload = function() {
     liff.init({ liffId: MY_LIFF_ID }).then(() => {
@@ -61,21 +67,51 @@
   };
 
   function startScanner() {
+    isScanned = false;
     Quagga.init({
-      inputStream: { name: "Live", type: "LiveStream", target: document.querySelector('#interactive') },
-      decoder: { readers: ["ean_reader", "ean_8_reader", "code_128_reader", "code_39_reader"] }
+      inputStream: {
+        name: "Live",
+        type: "LiveStream",
+        target: document.querySelector('#interactive'),
+        constraints: {
+          facingMode: "environment",
+          width: { min: 640 },
+          height: { min: 480 }
+        }
+      },
+      locator: { patchSize: "medium", halfSample: true },
+      numOfWorkers: 2,
+      decoder: {
+        // จำกัดเหลือเฉพาะบาร์โค้ดมาตรฐานสินค้าไทย (EAN-13) และ Code 128 เพื่อความแม่นยำสูงสุด
+        readers: ["ean_reader", "code_128_reader"] 
+      }
     }, function(err) {
-      if (err) return document.getElementById("status").innerText = "❌ กล้องมีปัญหา: " + err;
+      if (err) return document.getElementById("status").innerText = "❌ เปิดกล้องไม่สำเร็จ: " + err;
       Quagga.start();
     });
 
     Quagga.onDetected(function(result) {
-      if (result && result.codeResult) {
-        document.getElementById("barcodeResult").value = result.codeResult.code;
-        document.getElementById("status").innerText = "✅ สแกนสำเร็จ! กรอกข้อมูลแล้วกดส่ง";
-        Quagga.stop();
+      if (isScanned) return; // ถ้าสแกนติดแล้ว ให้ข้ามทันที
+      
+      if (result && result.codeResult && result.codeResult.code) {
+        let code = result.codeResult.code;
+        
+        // กรองเฉพาะรหัส EAN-13 ที่มี 13 หลักเพื่อลดข้อผิดพลาด
+        if (code.length === 13 || code.length >= 8) {
+          isScanned = true;
+          Quagga.stop(); // สั่งหยุดกล้องทันทีเพื่อคืนทรัพยากรให้เครื่องพิมพ์ได้ลื่นๆ
+          
+          document.getElementById("barcodeResult").value = code;
+          document.getElementById("status").innerText = "✅ สแกนสำเร็จ! พิมพ์แก้ไขหรือกรอกข้อมูลด้านล่างได้เลย";
+        }
       }
     });
+  }
+
+  function resetScanner() {
+    document.getElementById("barcodeResult").value = "";
+    document.getElementById("status").innerText = "ส่องกล้องไปที่บาร์โค้ดได้เลย";
+    startScanner();
   }
 
   function submitData() {
@@ -83,8 +119,16 @@
     let qty = document.getElementById("qtyInput").value;
     let price = document.getElementById("priceInput").value;
 
-    if (!code || !qty || !price) {
-      alert("⚠️ กรุณาสแกนบาร์โค้ด และกรอกจำนวนกับยอดเงินให้ครบถ้วน");
+    if (!code) {
+      alert("⚠️ กรุณาสแกนหรือพิมพ์รหัสบาร์โค้ด");
+      return;
+    }
+    if (!qty || qty <= 0) {
+      alert("⚠️ กรุณาระบุจำนวนสินค้าให้ถูกต้อง");
+      return;
+    }
+    if (!price || price < 0) {
+      alert("⚠️ กรุณาระบุราคารวมจ่ายให้ถูกต้อง");
       return;
     }
 
