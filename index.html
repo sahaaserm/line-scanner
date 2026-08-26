@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>LIFF Barcode Scanner V4</title>
+  <title>LIFF Barcode Scanner V5</title>
   
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@ericblade/quagga2/dist/quagga.min.js"></script>
@@ -22,9 +22,25 @@
     .status-box { background: #e8f5e9; padding: 10px; border-radius: 6px; color: #2e7d32; font-weight: bold; margin-top: 10px; font-size: 13px; text-align: center; }
     
     .form-group { text-align: left; margin-top: 12px; }
-    .form-group label { font-size: 13px; font-weight: bold; color: #333; display: block; margin-bottom: 4px; }
+    .form-group label { font-size: 13px; font-weight: bold; color: #333; display: block; margin-bottom: 6px; }
     .form-group input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 18px; background-color: #fff; -webkit-appearance: none; }
     
+    /* ปุ่มเลือกจำนวนด่วน */
+    .qty-btn-group { display: flex; gap: 8px; margin-bottom: 8px; }
+    .btn-qty {
+      flex: 1;
+      padding: 10px 0;
+      background-color: #e0e0e0;
+      color: #333;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      text-align: center;
+    }
+    .btn-qty:active { background-color: #00b900; color: white; }
+
     .btn-send { width: 100%; padding: 14px; background: #00b900; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; margin-top: 15px; cursor: pointer; }
     .btn-reset { width: 100%; padding: 10px; background: #666; color: white; border: none; border-radius: 6px; font-size: 14px; margin-top: 8px; cursor: pointer; }
   </style>
@@ -34,22 +50,30 @@
 <div class="container">
   <h2>📷 สแกนรับสินค้าเข้า</h2>
   
-  <!-- กรอบกล้อง -->
   <div id="scanner-box">
     <div id="interactive" class="viewport"></div>
   </div>
 
   <div id="status" class="status-box">กำลังเปิดกล้อง...</div>
 
-  <!-- ฟอร์มกรอกข้อมูล -->
   <div class="form-group">
     <label>รหัสบาร์โค้ด:</label>
     <input type="tel" id="barcodeResult" placeholder="สแกนหรือพิมพ์รหัสบาร์โค้ด">
   </div>
+
   <div class="form-group">
     <label>จำนวนที่รับเข้า (ชิ้น):</label>
-    <input type="tel" id="qtyInput" value="1">
+    <!-- ปุ่มเลือกตัวเลขด่วน -->
+    <div class="qty-btn-group">
+      <button type="button" class="btn-qty" onclick="setQty(1)">1</button>
+      <button type="button" class="btn-qty" onclick="setQty(6)">6</button>
+      <button type="button" class="btn-qty" onclick="setQty(12)">12</button>
+      <button type="button" class="btn-qty" onclick="setQty(24)">24</button>
+    </div>
+    <!-- ช่องพิมพ์จำนวนเอง -->
+    <input type="tel" id="qtyInput" value="1" placeholder="หรือพิมพ์จำนวนเองที่นี่">
   </div>
+
   <div class="form-group">
     <label>ราคารวมจ่ายทั้งหมด (บาท):</label>
     <input type="tel" id="priceInput" placeholder="ระบุยอดเงิน เช่น 2500">
@@ -76,9 +100,14 @@
     });
   };
 
+  // ฟังก์ชันกดเลือกจำนวนด่วน
+  function setQty(val) {
+    document.getElementById("qtyInput").value = val;
+  }
+
   function startScanner() {
     isScanned = false;
-    document.getElementById("scanner-box").style.display = "block"; // แสดงกล้อง
+    document.getElementById("scanner-box").style.display = "block";
     
     Quagga.init({
       inputStream: {
@@ -108,13 +137,11 @@
         let code = result.codeResult.code;
         if (code.length >= 8) {
           isScanned = true;
-          
-          // หยุดกล้องและซ่อนช่องกล้องทันทีเพื่อคืนแป้นพิมพ์
           Quagga.stop();
           document.getElementById("scanner-box").style.display = "none";
           
           document.getElementById("barcodeResult").value = code;
-          document.getElementById("status").innerText = "✅ สแกนสำเร็จ! พิมพ์จำนวนและราคาด้านล่างได้เลย";
+          document.getElementById("status").innerText = "✅ สแกนสำเร็จ! เลือกจำนวนและกรอกราคาด้านล่าง";
         }
       }
     });
